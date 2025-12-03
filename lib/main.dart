@@ -4,9 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
+// Ensure these imports point to the correct files in your project
 import 'screens/chat_list_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/user_service.dart';
+import 'utils.dart'; 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,18 +25,40 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Chat App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ),
       home: const AuthGate(),
       routes: {
+        '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
+        '/chatList': (_) => ChatListScreen(), // Removed const here as ChatListScreen might not be const constructor
         '/chat': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as ChatScreenArgs;
-          return ChatScreen(chatId: args.chatId, otherUserId: args.otherUserId);
+          return ChatScreen(
+            chatId: args.chatId,
+            otherUserId: args.otherUserId,
+          );
         },
       },
-
     );
   }
 }
@@ -83,19 +107,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+
+    setState(() => _loading = true); // Added setState to show loader
 
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+      // AuthGate will automatically route to ChatList
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign in failed: ${e.message}')),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        // Assuming showErrorSnackbar is defined in utils.dart as imported
+        showErrorSnackbar(context, 'Sign in failed: ${e.message}');
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -125,7 +151,11 @@ class _LoginScreenState extends State<LoginScreen> {
               ElevatedButton(
                 onPressed: _loading ? null : _signIn,
                 child: _loading
-                    ? const CircularProgressIndicator()
+                    ? const SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(color: Colors.white)
+                      )
                     : const Text('Sign In'),
               ),
               const SizedBox(height: 12),
@@ -166,7 +196,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    // Assuming showLoadingDialog is defined in utils.dart as imported
+    showLoadingDialog(context, message: 'Creating account...'); 
     final username = _usernameController.text.trim().toLowerCase();
     final email = _emailController.text.trim();
 
@@ -178,10 +209,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           .get();
 
       if (exists.exists) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Username already taken')),
-        );
-        setState(() => _loading = false);
+        if (mounted) hideLoadingDialog(context); // Assuming hideLoadingDialog is in utils.dart
+        if (mounted) showErrorSnackbar(context, 'Username already taken');
         return;
       }
 
@@ -199,20 +228,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         username: username,
       );
 
-      // 🔥 Auto-login → Navigate directly to chat list
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => ChatListScreen()),
-        (_) => false,
-      );
-
+      if (mounted) hideLoadingDialog(context);
+      if (mounted) Navigator.pop(context); // Go back to login or let AuthGate handle it
+      
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: ${e.message}')),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) hideLoadingDialog(context);
+      if (mounted) showErrorSnackbar(context, 'Registration failed: ${e.message}');
     }
   }
 
@@ -260,6 +281,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
 class ChatScreenArgs {
   final String chatId;
   final String otherUserId;

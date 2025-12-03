@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Ensure these imports are correct for your project
 import '../services/chat_service.dart';
 import '../services/user_service.dart';
+import '../services/chat_metadata_service.dart'; 
 import '../models/message_model.dart';
 import '../models/user_model.dart';
 
@@ -18,15 +20,13 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController messageController = TextEditingController();
-  final ScrollController scrollController = ScrollController();
   final ChatService chatService = ChatService();
 
-  String get currentUid => FirebaseAuth.instance.currentUser!.uid;
+  String get currentUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
   void dispose() {
     messageController.dispose();
-    scrollController.dispose();
     super.dispose();
   }
 
@@ -34,20 +34,17 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = messageController.text.trim();
     if (text.isEmpty) return;
 
-    await chatService.sendMessage(chatId: widget.chatId, senderId: currentUid, text: text);
-    messageController.clear();
-    scrollToBottom();
-  }
+    messageController.clear(); 
 
-  void scrollToBottom() {
-    if (!scrollController.hasClients) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      scrollController.animateTo(
-        scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
+    // 1. Send the message
+    await chatService.sendMessage(chatId: widget.chatId, senderId: currentUid, text: text);
+
+    // 2. Update the Chat List "Last Message"
+    await ChatMetadataService().updateChatMetadata(
+      chatId: widget.chatId,
+      lastMessage: text,
+      participants: [currentUid, widget.otherUserId],
+    );
   }
 
   @override
@@ -58,7 +55,24 @@ class _ChatScreenState extends State<ChatScreen> {
         final otherUserName = snap.data?.username ?? 'Chat';
 
         return Scaffold(
-          appBar: AppBar(title: Text(otherUserName)),
+          appBar: AppBar(
+            title: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.white24,
+                  child: Icon(Icons.person, size: 20, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                Text(otherUserName, style: const TextStyle(fontSize: 18)),
+              ],
+            ),
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+          ),
+          
+          backgroundColor: Colors.grey[100], 
+
           body: Column(
             children: [
               Expanded(
@@ -69,16 +83,30 @@ class _ChatScreenState extends State<ChatScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    final messages = snapshot.data ?? [];
+                    // --- FIX IS HERE ---
+                    // We reverse the list so Newest is at Index 0
+                    // This makes it work perfectly with reverse: true
+                    final messages = (snapshot.data ?? []).reversed.toList();
 
                     if (messages.isEmpty) {
-                      return const Center(child: Text('No messages yet. Say hi!'));
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.waving_hand, size: 50, color: Colors.deepPurple.withOpacity(0.5)),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No messages yet.\nSay hi to $otherUserName!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      );
                     }
 
-                    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToBottom());
-
                     return ListView.builder(
-                      controller: scrollController,
+                      reverse: true, // Keeps keyboard behavior smooth
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final message = messages[index];
@@ -94,19 +122,39 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-              SafeArea(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+              // INPUT AREA
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
+                color: Colors.white,
+                child: SafeArea(
                   child: Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: messageController,
-                          decoration: const InputDecoration(hintText: 'Type a message...'),
-                          onSubmitted: (_) => sendMessage(),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: TextField(
+                            controller: messageController,
+                            decoration: const InputDecoration(
+                              hintText: 'Type a message...',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                            onSubmitted: (_) => sendMessage(),
+                          ),
                         ),
                       ),
-                      IconButton(icon: const Icon(Icons.send), onPressed: sendMessage),
+                      const SizedBox(width: 8),
+                      CircleAvatar(
+                        backgroundColor: Colors.deepPurple,
+                        radius: 24,
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                          onPressed: sendMessage,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -133,21 +181,41 @@ class _MessageBubble extends StatelessWidget {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        padding: const EdgeInsets.all(10),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
         decoration: BoxDecoration(
-          color: isMe ? Colors.blue[200] : Colors.grey[300],
-          borderRadius: BorderRadius.circular(12),
+          color: isMe ? Colors.deepPurple : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: isMe ? const Radius.circular(16) : Radius.zero,
+            bottomRight: isMe ? Radius.zero : const Radius.circular(16),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            )
+          ],
         ),
         child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(text),
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Text(
-                timeString,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+            Text(
+              text,
+              style: TextStyle(
+                color: isMe ? Colors.white : Colors.black87,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              timeString,
+              style: TextStyle(
+                color: isMe ? Colors.white70 : Colors.grey[500],
+                fontSize: 10,
               ),
             ),
           ],

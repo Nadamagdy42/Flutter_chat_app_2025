@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+// Ensure these imports match your actual file names
 import '../services/chat_metadata_service.dart';
 import '../services/user_service.dart';
 import '../models/chat_model.dart';
@@ -16,7 +18,8 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final _searchController = TextEditingController();
-  final String uid = FirebaseAuth.instance.currentUser!.uid;
+  // Get current user ID safely
+  final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   Stream<QuerySnapshot<Map<String, dynamic>>>? _searchStream;
 
@@ -37,21 +40,32 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _startChat(String receiverId) async {
-    if (receiverId == uid) return; // Prevent chatting with yourself
+    if (receiverId == uid) return; 
 
+    // --- FIX: Check GLOBAL 'chats' collection ---
+    // We check if there are any chats where I am a participant
     final existing = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('chats')
-        .where('participants', arrayContains: receiverId)
-        .limit(1)
+        .collection('chats') 
+        .where('participants', arrayContains: uid)
         .get();
 
-    String chatId;
+    String? existingChatId;
+    
+    // Filter locally to find the chat that ALSO contains the receiver
+    for (var doc in existing.docs) {
+      List<dynamic> participants = doc['participants'];
+      if (participants.contains(receiverId)) {
+        existingChatId = doc.id;
+        break;
+      }
+    }
 
-    if (existing.docs.isNotEmpty) {
-      chatId = existing.docs.first.id;
+    String chatId;
+    if (existingChatId != null) {
+      // Found it! Re-use this ID.
+      chatId = existingChatId;
     } else {
+      // Not found, create a new one.
       chatId = await ChatMetadataService().createChat(uid, receiverId);
     }
 
@@ -65,81 +79,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
           otherUserId: receiverId,
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Chats"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (!mounted) return;
-              Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: "Search username...",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onChanged: _searchUsers,
-            ),
-          ),
-
-          Expanded(
-            child: _searchStream == null
-                ? _buildRecentChats()
-                : _buildSearchResults(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// SEARCH RESULTS
-  Widget _buildSearchResults() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _searchStream,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final users = snapshot.data!.docs
-            .where((doc) => doc.id != uid)
-            .toList();
-
-        if (users.isEmpty) {
-          return const Center(child: Text("No users found"));
-        }
-
-        return ListView.builder(
-          itemCount: users.length,
-          itemBuilder: (_, i) {
-            final data = users[i].data() as Map<String, dynamic>;
-            return ListTile(
-              title: Text(data['username']),
-              subtitle: Text(data['email'] ?? ''),
-              onTap: () => _confirmChat(users[i].id, data['username']),
-            );
-          },
-        );
-      },
     );
   }
 
@@ -166,17 +105,112 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  /// RECENT CHATS UI
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Chats"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              // AuthGate in main.dart will handle the navigation automatically
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: "Search username...",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: _searchUsers,
+            ),
+          ),
+
+          // Main Content
+          Expanded(
+            child: _searchStream == null
+                ? _buildRecentChats() // Show My Chats
+                : _buildSearchResults(), // Show Search Results
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 1. SEARCH RESULTS UI ---
+  Widget _buildSearchResults() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _searchStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text("Search Error"));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+        final users = snapshot.data!.docs
+            .where((doc) => doc.id != uid)
+            .toList();
+
+        if (users.isEmpty) {
+          return const Center(child: Text("No users found"));
+        }
+
+        return ListView.builder(
+          itemCount: users.length,
+          itemBuilder: (_, i) {
+            final data = users[i].data() as Map<String, dynamic>;
+            return ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.person)),
+              title: Text(data['username'] ?? 'No Name'),
+              subtitle: Text(data['email'] ?? ''),
+              onTap: () => _confirmChat(users[i].id, data['username']),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- 2. RECENT CHATS UI ---
   Widget _buildRecentChats() {
+    if (uid.isEmpty) return const Center(child: Text("Error: User not found"));
+
     return StreamBuilder<QuerySnapshot>(
       stream: ChatMetadataService().chatsStream(uid),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        
+        if (snapshot.hasError) {
+          return Center(
+            child: Text("Error loading chats:\n${snapshot.error}", 
+              style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("You have no recent chats"));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey),
+                SizedBox(height: 10),
+                Text("No chats yet. Search for a user!"),
+              ],
+            ),
+          );
         }
 
         final docs = snapshot.data!.docs;
@@ -184,28 +218,60 @@ class _ChatListScreenState extends State<ChatListScreen> {
         return ListView.builder(
           itemCount: docs.length,
           itemBuilder: (_, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
             final chatId = docs[i].id;
-            final chatModel =
-                ChatModel.fromMap(docs[i].data() as Map<String, dynamic>,
-                    id: chatId);
+            
+            // Safety check
+            if (!data.containsKey('participants')) return const SizedBox();
 
-            final otherUserId =
-                chatModel.participants.firstWhere((id) => id != uid);
+            final chatModel = ChatModel.fromMap(data, id: chatId);
+
+            final otherUserId = chatModel.participants.firstWhere(
+              (id) => id != uid, 
+              orElse: () => 'Unknown',
+            );
 
             return FutureBuilder<UserModel?>(
               future: UserService().getUserByUid(otherUserId),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const ListTile(title: Text("Loading user..."));
+              builder: (context, userSnap) {
+                String displayName = "Loading...";
+                if (userSnap.hasData && userSnap.data != null) {
+                  displayName = userSnap.data!.username;
                 }
 
-                final user = snap.data!;
                 return ListTile(
-                  title: Text(user.username),
+                  // 1. BETTER AVATAR: Shows the first letter of their name with a color
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.deepPurple.shade100,
+                    child: Text(
+                      displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  
+                  // 2. BOLD TITLE: Makes the name pop
+                  title: Text(
+                    displayName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  
+                  // 3. CLEAN SUBTITLE: Shows last message or "Say hello" placeholder
                   subtitle: Text(
-                      chatModel.lastMessage.isEmpty
-                          ? "Say hello 👋"
-                          : chatModel.lastMessage),
+                    chatModel.lastMessage.isEmpty ? "Say hello 👋" : chatModel.lastMessage,
+                    maxLines: 1, 
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: chatModel.lastMessage.isEmpty ? Colors.blue : Colors.grey[600],
+                      fontStyle: chatModel.lastMessage.isEmpty ? FontStyle.italic : FontStyle.normal,
+                    ),
+                  ),
+                  
+                  // 4. TIMESTAMP: Shows the date on the right side
+                  trailing: Text(
+                    _formatDate(data['lastUpdatedAt']), 
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  
                   onTap: () => _startChat(otherUserId),
                 );
               },
@@ -214,5 +280,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
         );
       },
     );
+  }
+
+  /// Helper to format Firestore timestamps into readable time
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return "";
+    if (timestamp is Timestamp) {
+      DateTime date = timestamp.toDate();
+      DateTime now = DateTime.now();
+      
+      // If it's today, show time (e.g., "10:30 AM")
+      if (now.year == date.year && now.month == date.month && now.day == date.day) {
+        String period = date.hour >= 12 ? "PM" : "AM";
+        int hour = date.hour > 12 ? date.hour - 12 : date.hour;
+        if (hour == 0) hour = 12;
+        return "$hour:${date.minute.toString().padLeft(2, '0')} $period";
+      }
+      
+      // If it's older, show the date (e.g., "12/05")
+      return "${date.day}/${date.month}";
+    }
+    return "";
   }
 }

@@ -8,7 +8,8 @@ class ChatMetadataService {
     return _db
         .collection('chats')
         .where('participants', arrayContains: uid)
-        .orderBy('timestamp', descending: true)
+        // MUST MATCH YOUR INDEX EXACTLY
+        .orderBy('lastUpdatedAt', descending: true) 
         .snapshots();
   }
 
@@ -17,7 +18,9 @@ class ChatMetadataService {
     var chatDoc = await _db.collection('chats').add({
       'participants': [uid, otherUid],
       'lastMessage': "",
-      'timestamp': FieldValue.serverTimestamp(),
+      // FIX: Writes 'lastUpdatedAt' to match the index
+      'lastUpdatedAt': FieldValue.serverTimestamp(), 
+      'createdAt': FieldValue.serverTimestamp(),
     });
 
     return chatDoc.id;
@@ -32,7 +35,8 @@ class ChatMetadataService {
     await _db.collection('chats').doc(chatId).update({
       'lastMessage': lastMessage,
       'participants': participants,
-      'timestamp': FieldValue.serverTimestamp(),
+      // FIX: Updates 'lastUpdatedAt' to match the index
+      'lastUpdatedAt': FieldValue.serverTimestamp(), 
     });
   }
 }
