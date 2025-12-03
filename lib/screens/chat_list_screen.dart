@@ -303,36 +303,3 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return "";
   }
 }
-/*
-  Chat List Screen – Firebase Firestore Chat App
-
-  🔹 Purpose:
-     - Display all existing chats for the currently logged-in user.
-     - Provide a search bar to find other registered users and start new chats.
-
-  🔹 How Chats Work:
-     - A chat document is created in Firestore under `chats/` when two users start a conversation.
-     - Each chat contains:
-          • participants → [uid1, uid2]
-          • lastMessage → preview text in list
-          • updatedAt → sorted by latest chat activity
-
-  🔹 Real-Time Updates:
-     - We listen to chats where arrayContains = current user ID
-     - Any new message updates "lastMessage" and "updatedAt"
-     - Chat list refreshes automatically without manual reload
-
-  🔹 Search System:
-     - Searches inside `users/` collection
-     - Prevents chatting with yourself
-     - If a chat already exists → open it
-     - If no chat exists → create a new chat in Firestore
-
-  🔹 Navigation:
-     - Tapping a chat item opens ChatScreen with:
-          • chatId
-          • target user info
-
-  Summary:
-  This file manages the UI and logiRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vvRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vvRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vvRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.Role 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vvRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vRole 3 is responsible for managing Firestore data for users and chat metadata across the entire chat app.vvc for recent chats and starting new conversations.
-*/
