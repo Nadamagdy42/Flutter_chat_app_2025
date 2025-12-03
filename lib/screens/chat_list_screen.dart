@@ -246,7 +246,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 }
 
                 return ListTile(
-                  // 1. BETTER AVATAR: Shows the first letter of their name with a color
+                  // 1. BETTER AVATAR: Shows the first letter of their name with any color
                   leading: CircleAvatar(
                     backgroundColor: Colors.deepPurple.shade100,
                     child: Text(
