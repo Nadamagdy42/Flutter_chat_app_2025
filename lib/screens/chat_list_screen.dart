@@ -8,6 +8,8 @@ import '../models/user_model.dart';
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key});
+
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
@@ -29,7 +31,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           .collection('users')
           .orderBy('username')
           .startAt([query.toLowerCase()])
-          .endAt([query.toLowerCase() + '\uf8ff'])
+          .endAt(['${query.toLowerCase()}\uf8ff'])
           .snapshots();
     });
   }

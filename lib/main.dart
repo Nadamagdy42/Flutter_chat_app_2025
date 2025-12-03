@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 import 'screens/chat_list_screen.dart';
-import 'services/user_service.dart';
-=======
-import 'firebase_options.dart';
 import 'screens/chat_screen.dart';
->>>>>>> 65cb4ea0fb7fc6e6439c1de2b240066c67079481
+import 'services/user_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,17 +29,9 @@ class MyApp extends StatelessWidget {
       home: const AuthGate(),
       routes: {
         '/register': (_) => const RegisterScreen(),
-
-
         '/chat': (context) {
-          final args =
-          ModalRoute.of(context)!.settings.arguments as ChatScreenArgs;
-
-          return ChatScreen(
-            chatId: args.chatId,
-            currentUserId: args.currentUserId,
-            otherUserName: args.otherUserName,
-          );
+          final args = ModalRoute.of(context)!.settings.arguments as ChatScreenArgs;
+          return ChatScreen(chatId: args.chatId, otherUserId: args.otherUserId);
         },
       },
 
@@ -274,12 +262,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 }
 class ChatScreenArgs {
   final String chatId;
-  final String currentUserId;
-  final String otherUserName;
+  final String otherUserId;
 
   ChatScreenArgs({
     required this.chatId,
-    required this.currentUserId,
-    required this.otherUserName,
+    required this.otherUserId,
   });
 }

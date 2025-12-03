@@ -1,220 +1,50 @@
-<<<<<<< HEAD
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../services/chat_metadata_service.dart';
-import '../services/message_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../services/chat_service.dart';
 import '../services/user_service.dart';
+import '../models/message_model.dart';
 import '../models/user_model.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
   final String otherUserId;
 
-  ChatScreen({required this.chatId, required this.otherUserId});
-=======
-import 'package:flutter/material.dart';
-import '../services/chat_service.dart';
-import '../models/message_model.dart';
-// those 2 imports in lines 2,3 are not added yet
-// These will point to your teammates' files later.
-// For now they may be red, that's okay until they add them.
-import '../services/chat_service.dart';
-import '../models/message_model.dart';
-
-class ChatScreen extends StatefulWidget {
-  final String chatId;
-  final String currentUserId;
-  final String otherUserName;
-
-  const ChatScreen({
-    super.key,
-    required this.chatId,
-    required this.currentUserId,
-    required this.otherUserName,
-  });
->>>>>>> 65cb4ea0fb7fc6e6439c1de2b240066c67079481
+  const ChatScreen({super.key, required this.chatId, required this.otherUserId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-<<<<<<< HEAD
-  final _messageController = TextEditingController();
-  final String currentUid = FirebaseAuth.instance.currentUser!.uid;
-  final _scrollController = ScrollController();
+  final TextEditingController messageController = TextEditingController();
+  final ScrollController scrollController = ScrollController();
+  final ChatService chatService = ChatService();
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
-=======
-  final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  // This assumes Role 1 will create a ChatService class.
-  final ChatService _chatService = ChatService();
+  String get currentUid => FirebaseAuth.instance.currentUser!.uid;
 
   @override
   void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
+    messageController.dispose();
+    scrollController.dispose();
     super.dispose();
->>>>>>> 65cb4ea0fb7fc6e6439c1de2b240066c67079481
   }
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-<<<<<<< HEAD
-    _messageController.clear();
-
+  Future<void> sendMessage() async {
+    final text = messageController.text.trim();
     if (text.isEmpty) return;
 
-    await MessageService().sendMessage(
-      chatId: widget.chatId,
-      senderId: currentUid,
-      text: text,
-    );
-
-    await ChatMetadataService().updateChatMetadata(
-      chatId: widget.chatId,
-      lastMessage: text,
-      participants: [currentUid, widget.otherUserId],
-    );
-
-    _scrollToBottom();
+    await chatService.sendMessage(chatId: widget.chatId, senderId: currentUid, text: text);
+    messageController.clear();
+    scrollToBottom();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<UserModel?>(
-      future: UserService().getUserByUid(widget.otherUserId),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return Scaffold(
-            appBar: AppBar(title: const Text("Chat")),
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final user = snap.data!;
-
-        return Scaffold(
-          appBar: AppBar(title: Text(user.username)),
-          body: Column(
-            children: [
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: MessageService().messagesStream(widget.chatId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          "Say hi 👋",
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      );
-                    }
-
-                    final messages = snapshot.data!.docs;
-
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _scrollToBottom();
-                    });
-
-                    return ListView.builder(
-                      controller: _scrollController,
-                      itemCount: messages.length,
-                      itemBuilder: (_, i) {
-                        final data = messages[i].data() as Map<String, dynamic>;
-                        final isMe = data['senderId'] == currentUid;
-
-                        return Align(
-                          alignment: isMe
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.symmetric(
-                                vertical: 4, horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: isMe
-                                  ? Colors.blue.shade300
-                                  : Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              data['text'] ?? '',
-                              style: TextStyle(
-                                color: isMe ? Colors.white : Colors.black,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              // INPUT FIELD
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  border: const Border(top: BorderSide(color: Colors.black12)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: const InputDecoration(
-                          hintText: "Type a message...",
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.send, color: Colors.blue),
-                      onPressed: _sendMessage,
-                    )
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-=======
-    if (text.isEmpty) return;
-
-    // Call Role 1's function. They will decide the exact signature.
-    await _chatService.sendMessage(
-      widget.chatId,
-      widget.currentUserId,
-      text,
-      // TODO: add extra parameters here if your team defines any.
-    );
-
-    _messageController.clear();
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-
+  void scrollToBottom() {
+    if (!scrollController.hasClients) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
+      scrollController.animateTo(
+        scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
     });
@@ -222,83 +52,69 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.otherUserName),
-      ),
-      body: Column(
-        children: [
-          // ===== MESSAGES LIST =====
-          Expanded(
-            child: StreamBuilder<List<MessageModel>>(
-              // Again, this assumes Role 1 exposes this stream.
-              stream: _chatService.messagesStream(widget.chatId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+    return FutureBuilder<UserModel?>(
+      future: UserService().getUserByUid(widget.otherUserId),
+      builder: (context, snap) {
+        final otherUserName = snap.data?.username ?? 'Chat';
 
-                final messages = snapshot.data ?? [];
+        return Scaffold(
+          appBar: AppBar(title: Text(otherUserName)),
+          body: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<List<MessageModel>>(
+                  stream: chatService.messagesStream(widget.chatId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet. Say hi!'),
-                  );
-                }
+                    final messages = snapshot.data ?? [];
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
+                    if (messages.isEmpty) {
+                      return const Center(child: Text('No messages yet. Say hi!'));
+                    }
 
-                return ListView.builder(
-                  controller: _scrollController,
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
+                    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToBottom());
 
-                    // These field names will be adjusted when you see MessageModel.
-                    final bool isMe =
-                        message.senderId == widget.currentUserId;
-
-                    return _MessageBubble(
-                      text: message.text,
-                      isMe: isMe,
-                      timestamp: message.timestamp,
+                    return ListView.builder(
+                      controller: scrollController,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        final isMe = message.senderId == currentUid;
+                        return _MessageBubble(
+                          text: message.text,
+                          isMe: isMe,
+                          timestamp: message.timestamp,
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-          ),
-
-          // ===== INPUT AREA =====
-          SafeArea(
-            child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: _sendMessage,
-                  ),
-                ],
+                ),
               ),
-            ),
+
+              SafeArea(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: messageController,
+                          decoration: const InputDecoration(hintText: 'Type a message...'),
+                          onSubmitted: (_) => sendMessage(),
+                        ),
+                      ),
+                      IconButton(icon: const Icon(Icons.send), onPressed: sendMessage),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -306,18 +122,13 @@ class _ChatScreenState extends State<ChatScreen> {
 class _MessageBubble extends StatelessWidget {
   final String text;
   final bool isMe;
-  final dynamic timestamp;
+  final DateTime timestamp;
 
-  const _MessageBubble({
-    required this.text,
-    required this.isMe,
-    this.timestamp,
-  });
+  const _MessageBubble({required this.text, required this.isMe, required this.timestamp});
 
   @override
   Widget build(BuildContext context) {
-    final String timeString =
-    timestamp == null ? '' : timestamp.toString();
+    final timeString = '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -329,25 +140,19 @@ class _MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
-          crossAxisAlignment:
-          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Text(text),
-            if (timeString.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  timeString,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontSize: 10),
-                ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text(
+                timeString,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
               ),
+            ),
           ],
         ),
       ),
->>>>>>> 65cb4ea0fb7fc6e6439c1de2b240066c67079481
     );
   }
 }
