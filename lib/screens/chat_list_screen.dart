@@ -1,7 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
+//This file is responsible for displaying the user's recent chats and providing a search bar
+// to find other users registered in the system. It plays a critical role in the chat application
+// because it acts as the central hub where the user begins every conversation. The ChatListScreen
+// is stateful because it manages the search text and dynamically switches between search mode
+// and recent chats mode.
 // Ensure these imports match your actual file names
 import '../services/chat_metadata_service.dart';
 import '../services/user_service.dart';
@@ -150,6 +154,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   // --- 1. SEARCH RESULTS UI ---
+  // The search results builder and recent chats builder both use StreamBuilder or FutureBuilder, ensuring the
+
   Widget _buildSearchResults() {
     return StreamBuilder<QuerySnapshot>(
       stream: _searchStream,
