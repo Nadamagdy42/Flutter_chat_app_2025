@@ -1,34 +1,27 @@
 class UserModel {
   final String uid;
+  final String username;
   final String email;
-  final String displayName;
 
-  const UserModel({
+  UserModel({
     required this.uid,
+    required this.username,
     required this.email,
-    required this.displayName,
   });
 
   Map<String, dynamic> toMap() {
     return {
+      'uid': uid,
+      'username': username,
       'email': email,
-      'displayName': displayName,
     };
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map, {required String uid}) {
     return UserModel(
       uid: uid,
-      email: map['email'] as String? ?? '',
-      displayName: map['displayName'] as String? ?? '',
-    );
-  }
-
-  UserModel copyWith({String? email, String? displayName}) {
-    return UserModel(
-      uid: uid,
-      email: email ?? this.email,
-      displayName: displayName ?? this.displayName,
+      username: map['username'] ?? '',
+      email: map['email'] ?? '',
     );
   }
 }

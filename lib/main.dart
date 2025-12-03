@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'firebase_options.dart';
+import 'screens/chat_list_screen.dart';
+import 'services/user_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,25 +33,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// A minimal placeholder home screen.
-///
-/// Teams should replace this with the real auth / navigation flow.
-class PlaceholderHomeScreen extends StatelessWidget {
-  const PlaceholderHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Placeholder Home')),
-      body: const Center(
-        child: Text('Placeholder Home Screen — replace with real home.'),
-      ),
-    );
-  }
-}
-
-/// AuthGate listens to Firebase Auth state and shows the login screen when
-/// unauthenticated, or the placeholder home when signed in.
+//////////// AUTH GATE ////////////
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -61,21 +47,17 @@ class AuthGate extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-
-        final user = snapshot.data;
-        if (user == null) {
-          return const LoginScreen();
-        }
-
-        return const PlaceholderHomeScreen();
+        return snapshot.data == null
+            ? const LoginScreen()
+            : ChatListScreen();
       },
     );
   }
 }
 
+//////////// LOGIN SCREEN ////////////
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -96,19 +78,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
-        password: _passwordController.text,
+        password: _passwordController.text.trim(),
       );
-      // On success, AuthGate will react and show the home screen.
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sign in failed: ${e.message}')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign in error: $e')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -120,34 +98,34 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Login')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || v.isEmpty) ? 'Enter email' : null,
+                validator: (v) => v!.isEmpty ? 'Enter email' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? 'Enter password' : null,
+                validator: (v) => v!.isEmpty ? 'Enter password' : null,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _loading ? null : _signIn,
-                child: _loading ? const CircularProgressIndicator() : const Text('Sign In'),
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Sign In'),
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => Navigator.of(context).pushNamed('/register'),
-                child: const Text('Create an account'),
+                onPressed: () => Navigator.pushNamed(context, '/register'),
+                child: const Text("Create an account"),
               ),
             ],
           ),
@@ -157,21 +135,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+//////////// REGISTER SCREEN ////////////
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -179,20 +159,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _loading = true);
+    final username = _usernameController.text.trim().toLowerCase();
+    final email = _emailController.text.trim();
+
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+      // Check username
+      final exists = await FirebaseFirestore.instance
+          .collection('usernames')
+          .doc(username)
+          .get();
+
+      if (exists.exists) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Username already taken')),
+        );
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Create Firebase Auth User
+      final userCred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: email,
+        password: _passwordController.text.trim(),
       );
-      Navigator.of(context).pop(); // go back to login; AuthGate will handle state
+
+      // Save profile
+      await UserService().createUserProfile(
+        uid: userCred.user!.uid,
+        email: email,
+        username: username,
+      );
+
+      // 🔥 Auto-login → Navigate directly to chat list
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => ChatListScreen()),
+        (_) => false,
+      );
+
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Registration failed: ${e.message}')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration error: $e')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -204,29 +215,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Register')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
+              TextFormField(
+                controller: _usernameController,
+                decoration: const InputDecoration(labelText: 'Username'),
+                validator: (v) => v!.isEmpty ? 'Enter username' : null,
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || v.isEmpty) ? 'Enter email' : null,
+                validator: (v) => v!.isEmpty ? 'Enter email' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
-                validator: (v) => (v == null || v.length < 6) ? 'Password min 6 chars' : null,
+                validator: (v) => v!.length < 6
+                    ? 'Password min 6 chars'
+                    : null,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _loading ? null : _register,
-                child: _loading ? const CircularProgressIndicator() : const Text('Create Account'),
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Create Account'),
               ),
             ],
           ),
