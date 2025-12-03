@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+import 'screens/chat_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +23,20 @@ class MyApp extends StatelessWidget {
       home: const AuthGate(),
       routes: {
         '/register': (_) => const RegisterScreen(),
+
+
+        '/chat': (context) {
+          final args =
+          ModalRoute.of(context)!.settings.arguments as ChatScreenArgs;
+
+          return ChatScreen(
+            chatId: args.chatId,
+            currentUserId: args.currentUserId,
+            otherUserName: args.otherUserName,
+          );
+        },
       },
+
     );
   }
 }
@@ -234,4 +246,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
+}
+class ChatScreenArgs {
+  final String chatId;
+  final String currentUserId;
+  final String otherUserName;
+
+  ChatScreenArgs({
+    required this.chatId,
+    required this.currentUserId,
+    required this.otherUserName,
+  });
 }
