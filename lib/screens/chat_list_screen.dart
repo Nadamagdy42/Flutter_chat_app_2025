@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 // Ensure these imports match your actual file names
 import '../services/chat_metadata_service.dart';
 import '../services/user_service.dart';
+import '../services/chat_service.dart';
 import '../models/chat_model.dart';
 import '../models/user_model.dart';
 import 'chat_screen.dart';
@@ -22,6 +23,7 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   // Get current user ID safely
   final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -110,35 +112,81 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Chats"),
+        toolbarHeight: 96,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('Chats', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            SizedBox(height: 4),
+            Text('Your conversations', style: TextStyle(fontSize: 12, color: Colors.white70)),
+          ],
+        ),
+        leadingWidth: 72,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 12, bottom: 12),
+          child: GestureDetector(
+            onTap: () async {
+              // placeholder for profile/settings
+              await showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Profile'), content: const Text('Profile screen placeholder'), actions: [TextButton(onPressed: Navigator.of(context).pop, child: const Text('Close'))]));
+            },
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.white24,
+              child: const Icon(Icons.person, color: Colors.white),
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              // AuthGate in main.dart will handle the navigation automatically
             },
           ),
+          const SizedBox(width: 6),
         ],
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          ),
+        ),
       ),
+      // No floating action button — search is available via the search field.
       body: Column(
         children: [
           // Search Bar
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: TextField(
+              focusNode: _searchFocus,
               controller: _searchController,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
                 hintText: "Search username...",
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); _searchUsers(''); })
+                    : null,
               ),
-              onChanged: _searchUsers,
+              onChanged: (v) {
+                _searchUsers(v);
+                setState(() {});
+              },
             ),
           ),
 
@@ -207,13 +255,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.chat_bubble_outline, size: 60, color: Colors.grey),
-                SizedBox(height: 10),
-                Text("No chats yet. Search for a user!"),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0,4))]),
+                  child: Column(
+                    children: const [
+                      Icon(Icons.chat_bubble_outline, size: 60, color: Colors.deepPurple),
+                      SizedBox(height: 8),
+                      Text("No chats yet.", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(onPressed: () => _searchFocus.requestFocus(), icon: const Icon(Icons.search), label: const Text('Find someone to chat')),              
               ],
             ),
           );
@@ -245,40 +303,77 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   displayName = userSnap.data!.username;
                 }
 
-                return ListTile(
-                  // 1. BETTER AVATAR: Shows the first letter of their name with any random color
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.deepPurple.shade100,
-                    child: Text(
-                      displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                      style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  
-                  // 2. BOLD TITLE: Makes the name pop
-                  title: Text(
-                    displayName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  
-                  // 3. CLEAN SUBTITLE: Shows last message or "Say hello" placeholder
-                  subtitle: Text(
-                    chatModel.lastMessage.isEmpty ? "Say hello 👋" : chatModel.lastMessage,
-                    maxLines: 1, 
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: chatModel.lastMessage.isEmpty ? Colors.blue : Colors.grey[600],
-                      fontStyle: chatModel.lastMessage.isEmpty ? FontStyle.italic : FontStyle.normal,
-                    ),
-                  ),
-                  
-                  // 4. TIMESTAMP: Shows the date on the right side
-                  trailing: Text(
-                    _formatDate(data['lastUpdatedAt']), 
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                  
-                  onTap: () => _startChat(otherUserId),
+                // Use a stream for unread counts and render a richer row
+                return StreamBuilder<int>(
+                  stream: ChatService().unreadCountStream(chatId, uid),
+                  builder: (context, unreadSnap) {
+                    final unread = unreadSnap.data ?? 0;
+
+                    return InkWell(
+                      onTap: () => _startChat(otherUserId),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0,2))],
+                        ),
+                        child: Row(
+                          children: [
+                            // Avatar
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor: Colors.deepPurple.shade50,
+                              child: Text(
+                                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                                style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Name + last message
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    chatModel.lastMessage.isEmpty ? 'Say hello 👋' : chatModel.lastMessage,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: chatModel.lastMessage.isEmpty ? Colors.blue : Colors.grey[600], fontSize: 14, fontStyle: chatModel.lastMessage.isEmpty ? FontStyle.italic : FontStyle.normal),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Time + unread badge
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(_formatDate(data['lastUpdatedAt']), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                const SizedBox(height: 8),
+                                if (unread > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.deepPurple,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Text(
+                                      unread > 99 ? '99+' : unread.toString(),
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             );

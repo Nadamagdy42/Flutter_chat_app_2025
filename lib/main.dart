@@ -97,6 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _showPassword = false;
 
   @override
   void dispose() {
@@ -108,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true); // Added setState to show loader
+    setState(() => _loading = true);
 
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -117,164 +118,149 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       // AuthGate will automatically route to ChatList
     } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        // Assuming showErrorSnackbar is defined in utils.dart as imported
-        showErrorSnackbar(context, 'Sign in failed: ${e.message}');
-        setState(() => _loading = false);
+      String friendly;
+      switch (e.code) {
+        case 'wrong-password':
+        case 'user-not-found':
+          friendly = 'Invalid email or password. Please try again.';
+          break;
+        case 'invalid-email':
+          friendly = 'The email address is badly formatted.';
+          break;
+        case 'user-disabled':
+          friendly = 'This account has been disabled. Contact support if this is unexpected.';
+          break;
+        case 'too-many-requests':
+          friendly = 'Too many attempts. Please wait a moment and try again.';
+          break;
+        default:
+          friendly = 'Sign in failed. Please check your email and password and try again.';
       }
+      if (mounted) showErrorSnackbar(context, friendly);
+    } catch (e) {
+      if (mounted) showErrorSnackbar(context, 'An unexpected error occurred. Please try again later.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v!.isEmpty ? 'Enter email' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                validator: (v) => v!.isEmpty ? 'Enter password' : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _loading ? null : _signIn,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20, 
-                        width: 20, 
-                        child: CircularProgressIndicator(color: Colors.white)
-                      )
-                    : const Text('Sign In'),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => Navigator.pushNamed(context, '/register'),
-                child: const Text("Create an account"),
-              ),
-            ],
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
-      ),
-    );
-  }
-}
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: size.width < 500 ? size.width : 420),
+              child: Card(
+                elevation: 12,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shadowColor: Colors.black54,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Logo / header
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(colors: [Colors.white, Colors.white70]),
+                            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
+                          ),
+                          child: const Icon(Icons.chat_bubble, size: 36, color: Color(0xFF2575FC)),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('Welcome back', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        Text('Sign in to continue', style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 20),
 
-//////////// REGISTER SCREEN ////////////
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
-  @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
-}
+                        // Email
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.email_outlined),
+                            hintText: 'you@example.com',
+                            labelText: 'Email',
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Enter email' : null,
+                        ),
+                        const SizedBox(height: 12),
 
-class _RegisterScreenState extends State<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _loading = false;
+                        // Password
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: !_showPassword,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            hintText: '••••••••',
+                            labelText: 'Password',
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            suffixIcon: IconButton(
+                              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _showPassword = !_showPassword),
+                            ),
+                          ),
+                          validator: (v) => v == null || v.isEmpty ? 'Enter password' : null,
+                        ),
+                        const SizedBox(height: 18),
 
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
+                        // Sign in button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _signIn,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 6,
+                            ),
+                            child: _loading
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white))
+                                : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // Assuming showLoadingDialog is defined in utils.dart as imported
-    showLoadingDialog(context, message: 'Creating account...'); 
-    final username = _usernameController.text.trim().toLowerCase();
-    final email = _emailController.text.trim();
-
-    try {
-      // Check username
-      final exists = await FirebaseFirestore.instance
-          .collection('usernames')
-          .doc(username)
-          .get();
-
-      if (exists.exists) {
-        if (mounted) hideLoadingDialog(context); // Assuming hideLoadingDialog is in utils.dart
-        if (mounted) showErrorSnackbar(context, 'Username already taken');
-        return;
-      }
-
-      // Create Firebase Auth User
-      final userCred = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: email,
-        password: _passwordController.text.trim(),
-      );
-
-      // Save profile
-      await UserService().createUserProfile(
-        uid: userCred.user!.uid,
-        email: email,
-        username: username,
-      );
-
-      if (mounted) hideLoadingDialog(context);
-      if (mounted) Navigator.pop(context); // Go back to login or let AuthGate handle it
-      
-    } on FirebaseAuthException catch (e) {
-      if (mounted) hideLoadingDialog(context);
-      if (mounted) showErrorSnackbar(context, 'Registration failed: ${e.message}');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Register')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username'),
-                validator: (v) => v!.isEmpty ? 'Enter username' : null,
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text("Don't have an account? "),
+                            TextButton(
+                              onPressed: () => Navigator.pushNamed(context, '/register'),
+                              child: const Text('Create account'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v!.isEmpty ? 'Enter email' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                validator: (v) => v!.length < 6
-                    ? 'Password min 6 chars'
-                    : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _loading ? null : _register,
-                child: _loading
-                    ? const CircularProgressIndicator()
-                    : const Text('Create Account'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -290,4 +276,188 @@ class ChatScreenArgs {
     required this.chatId,
     required this.otherUserId,
   });
+}
+
+/// Register screen (polished UI)
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+  bool _showPassword = false;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    showLoadingDialog(context, message: 'Creating account...');
+    final username = _usernameController.text.trim().toLowerCase();
+    final email = _emailController.text.trim();
+
+    try {
+      final exists = await FirebaseFirestore.instance.collection('usernames').doc(username).get();
+
+      if (exists.exists) {
+        if (mounted) hideLoadingDialog(context);
+        if (mounted) showErrorSnackbar(context, 'Username already taken');
+        return;
+      }
+
+      final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: _passwordController.text.trim(),
+      );
+
+      await UserService().createUserProfile(
+        uid: userCred.user!.uid,
+        email: email,
+        username: username,
+      );
+
+      if (mounted) hideLoadingDialog(context);
+      if (mounted) Navigator.pop(context);
+    } on FirebaseAuthException catch (e) {
+      if (mounted) hideLoadingDialog(context);
+      if (mounted) showErrorSnackbar(context, 'Registration failed: ${e.message}');
+    } catch (e) {
+      if (mounted) hideLoadingDialog(context);
+      if (mounted) showErrorSnackbar(context, 'Registration error: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF2575FC), Color(0xFF6A11CB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: size.width < 600 ? size.width : 540),
+              child: Card(
+                elevation: 12,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        const Text('Create account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text('Sign up to start chatting', style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 18),
+
+                        // Username
+                        TextFormField(
+                          controller: _usernameController,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.person_outline),
+                            hintText: 'yourusername',
+                            labelText: 'Username',
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Enter username' : null,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Email
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.email_outlined),
+                            hintText: 'you@example.com',
+                            labelText: 'Email',
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          ),
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Enter email' : null,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Password
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: !_showPassword,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            hintText: 'Choose a strong password',
+                            labelText: 'Password',
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            suffixIcon: IconButton(
+                              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _showPassword = !_showPassword),
+                            ),
+                          ),
+                          validator: (v) => v == null || v.length < 6 ? 'Password min 6 chars' : null,
+                        ),
+                        const SizedBox(height: 18),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _register,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 6,
+                            ),
+                            child: _loading
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white))
+                                : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Already have an account?'),
+                            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Sign in')),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

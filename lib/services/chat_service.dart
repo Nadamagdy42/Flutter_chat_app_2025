@@ -41,6 +41,7 @@ class ChatService {
         senderId: senderId,
         text: text,
         timestamp: DateTime.now(),
+        read: false,
       );
 
       await newRef.set(message.toMap());
@@ -50,6 +51,56 @@ class ChatService {
     } catch (e) {
       throw Exception('ChatService.sendMessage failed: $e');
     }
+  }
+
+  /// Marks unread messages in [chatId] as read for messages not sent by [userId].
+  ///
+  /// This reads the messages under `/messages/{chatId}` and sets the `read` flag
+  /// to true for any message where `read == false` and `senderId != userId`.
+  Future<void> markMessagesRead({required String chatId, required String userId}) async {
+    final ref = _db.child('messages').child(chatId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+
+    final updates = <String, Object>{};
+    for (final child in snapshot.children) {
+      final val = child.value;
+      if (val is Map) {
+        final sender = val['senderId'] as String?;
+        final read = val['read'];
+        if (sender != null && sender != userId && (read == null || read == false)) {
+          updates['${child.key}/read'] = true;
+        }
+      }
+    }
+
+    if (updates.isNotEmpty) {
+      await ref.update(updates);
+    }
+  }
+
+  /// Returns a stream of unread message counts for [chatId] for the given [userId].
+  ///
+  /// The stream listens to changes under `/messages/{chatId}` and counts messages
+  /// where `read == false` and `senderId != userId`.
+  Stream<int> unreadCountStream(String chatId, String userId) {
+    final ref = _db.child('messages').child(chatId);
+    return ref.onValue.map((event) {
+      final snapshot = event.snapshot;
+      if (!snapshot.exists) return 0;
+      int count = 0;
+      for (final child in snapshot.children) {
+        final val = child.value;
+        if (val is Map) {
+          final sender = val['senderId'] as String?;
+          final read = val['read'];
+          if (sender != null && sender != userId && (read == null || read == false)) {
+            count++;
+          }
+        }
+      }
+      return count;
+    });
   }
 
   /// Returns a stream of messages for the given `chatId` ordered by timestamp
